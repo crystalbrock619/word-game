@@ -8,11 +8,13 @@
     <body>
         <h1>Welcome to: "The Brain Scrambler"</h1>
         <header>
-        <p id="playerName"></p>
-        <p id="coinCounter">0
-        <img id="coinImg" src="http://clipart-library.com/newimages/money-clip-art-40.png"/></p>
+        <p id="playerName">Player name:</p>
+        <div id="scoreBoard">
+        <p id="coinCounter">0</p>
+        <img id="coinImg" src="http://clipart-library.com/newimages/money-clip-art-40.png"/>
+        </div>
         </header>
-        <section>
+        <section id="main">
             <form id=startForm>
                 <input id="name" type="text" placeholder="Enter your name">
                 <input id="startButton" type="button" value="New Game">
