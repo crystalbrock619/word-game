@@ -68,12 +68,19 @@ header{
     justify-content: space-around;
     border-bottom: solid .2rem #778899;
 }
+#scoreBoard{
+    display: flex;
+    flex-direction: row;
+    justify-content: end;
+    align-content: flex-end;
+}
 #coinImg{
-    width:5rem;
+    height: 4rem;
+    margin-top: 5rem;
 }
 #coinCounter{
     font-size: 4rem;
-    margin-top: 4rem;
+    margin-top: 5rem;
 }
 #startForm{
     display: flex;
@@ -89,7 +96,7 @@ header{
     color: #000080;
     border: 3px solid #000080;
 }
-#startButton, #checkButton{
+#startButton, .checkButton, .generateButton{
     padding: .5rem;
     margin-top: 1rem;
     color: #000080;
