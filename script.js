@@ -22,7 +22,7 @@ var $rightSound = $("<audio preload=auto>");
 var $wrongSound = $("<audio preload=auto>");
 $rightSound.attr("src", "https://www.kasandbox.org/programming-sounds/rpg/coin-jingle.mp3");
 $wrongSound.attr("src", "https://www.kasandbox.org/programming-sounds/rpg/giant-no.mp3");
-$("#startButton").on("click", function(event){
+$("#startButton").on("submit", function(event){
     event.preventDefault();
     var name = $("#name").val();
     var playerName = $("#playerName");
@@ -31,7 +31,7 @@ $("#startButton").on("click", function(event){
     $gameForm.append(newLabel, newSpan, answerBox, result, generateButton);
     $("#main").append($gameForm);
 });
-$(generateButton).on("click", function(event){
+$(generateButton).on("submit", function(event){
     event.preventDefault;
     generateButton.css("display", "none");
     checkButton.appendTo($gameForm);
@@ -41,7 +41,7 @@ $(generateButton).on("click", function(event){
     var scram = Object.values(scramWords);
     newSpan.text(scram[genScramWord()]);
 })
-$(checkButton).on("click", function(){
+$(checkButton).on("submit", function(){
     let playerAnswer = answerBox.val();
     var answerKeys = Object.keys(scramWords);
     var isCorrect = answerKeys.includes(playerAnswer);
@@ -50,13 +50,9 @@ $(checkButton).on("click", function(){
     if(isCorrect){
         result.text("Wow! You got it right!");
         $score.text((score)+1);
-        $("body").append($rightSound);
-        $rightSound[0].play();
         generateButton.css("display", "flex");
         checkButton.css("display", "none");
     } else{
-        $("body").append($wrongSound);
-        $wrongSound[0].play();
         result.text("That's not the word we are looking for. Try again.")
     }
 })
