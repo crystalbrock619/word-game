@@ -29,11 +29,13 @@
     let $checkButton = $("<button>");
     $checkButton.addClass("checkButton");
     $checkButton.attr("type", "submit");
-    $checkButton.attr("value", "Check");
+    $checkButton.text("Check");
     
 //**************************************************************************************** */
     let $nextButton = $("<input>");
-    $nextButton.val("Get Next").attr("type", "button").addClass("nextButton").css("display", "none");
+    $nextButton.val("Get Next").attr("type", "button")
+    $nextButton.addClass("nextButton");
+    $nextButton.css("display", "none");
 //**************************************************************************************************** */
     let $result = $("<p>");
     $result.attr("id", "result");
@@ -49,7 +51,7 @@
     $name.on("keyup", function(e){
         if(e.enterKey){
             console.log("I'm Done");
-            e.preventDefault;
+            //e.preventDefault;
             $startForm.submit();
         }
     });
