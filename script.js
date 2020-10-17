@@ -56,7 +56,7 @@
 //TRIGGER START FORM SUBMIT ON START BUTTON CLICK
     $startButton.click(function(e){
         console.log("I'm Done");
-        e.preventDefault;
+        //e.preventDefault;
         $startForm.submit();
     });
 //START FORM SUBMIT EVENT FUNCTION
@@ -67,7 +67,7 @@
         var $playerName = $("#playerName");
         $playerName.text("Player name: "+name);
         $startForm.css("display", "none");
-        $gameForm.append($newLabel, $newSpan, $answerBox, $result, $checkButton, $nextButton);
+        $gameForm.append($newLabel, $newSpan, $answerBox, $result, $checkButton);
         $newSpan.text(scram[genScramWord()]);
         $("#main").append($gameForm);
     });
@@ -76,19 +76,17 @@
     $gameForm.on("keydown", function(e){
         if(e.enterKey){
             console.log("I'm Done");
-            e.preventDefault;
             $startForm.submit();
         }
     });
 //TRIGGER GAME FORM SUBMIT ON CHECK BUTTON CLICK
     $checkButton.on("click", function(e){
-        e.preventDefault;
         console.log("I'm Done");
         $gameForm.submit();
     })
 //GAME FORM SUBMIT EVENT FUNCTION
     $gameForm.on("submit", function(e){
-        e.preventDefault;
+        e.preventDefault();
         console.log("I'm Done");
         let playerAnswer = $answerBox.val();
         var answerKeys = Object.keys(scramWords);
@@ -101,6 +99,7 @@
             $result.text("Wow! You got it right!");
             $score.text((score)+1);
             $checkButton.css("display", "none");
+            $gameForm.append($nextButton);
             $nextButton.css("display", "flex");
         } else{
             $("body").append($wrongSound);
@@ -110,7 +109,6 @@
     });
 //NEXT BUTTON CLICK EVENT FUNCTION
     $nextButton.on("click", function(){
-        e.preventDefault;
         console.log("I'm Done");
         $nextButton.css("display", "none");
         $checkButton.css("display", "flex");
