@@ -1,3 +1,4 @@
+
 //OBJECT CONTAINING UNSCRAMBLED WORDS AND THEIR SCRAMBLED VALUE
     const scramWords = {plate:"epatl",breakable:"ebraablek",reaction:"iaortcen", sneeze:"esenez", sand:"asdn", mixed:"edimx", pour:"upro", discussion:"udcisnisos", multiply:"plmyutil", insidious:"uodsiisni", uneven:"nnevue", windy:"dnwyi"};
 //RANDOM NUMBER GENERATOR FUNCTION
@@ -47,33 +48,31 @@
     var $wrongSound = $("<audio preload=auto>");
     $wrongSound.attr("src", "https://www.kasandbox.org/programming-sounds/rpg/giant-no.mp3");
 //**************************************************************************************************** */
-//TRIGGER START FORM SUBMIT ON ENTER IN NAME FIELD
-    $name.on("keyup", function(e){
-        if(e.enterKey){
-            console.log("I'm Done");
-            //e.preventDefault;
-            $startForm.submit();
-        }
-    });
-//TRIGGER START FORM SUBMIT ON START BUTTON CLICK
-    $startButton.click(function(e){
-        console.log("I'm Done");
-        //e.preventDefault;
-        $startForm.submit();
-    });
-//START FORM SUBMIT EVENT FUNCTION
-    $startForm.submit(function(e){
-        e.preventDefault();
-        console.log("I'm Done");
-        var name = $name.val();
-        var $playerName = $("#playerName");
-        $playerName.text("Player name: "+name);
-        $startForm.css("display", "none");
-        $gameForm.append($newLabel, $newSpan, $answerBox, $result, $checkButton);
-        $newSpan.text(scram[genScramWord()]);
-        $("#main").append($gameForm);
-    });
 
+let $user = $("#user");
+let $playerName = $("#playerName");
+function setUserName() {
+    let playerName = prompt('Please enter your name');
+    if(!playerName) {
+        setUserName();
+    } else {
+    localStorage.setItem('playerName', playerName);
+    $playerName.text("Player name: "+playerName);
+}
+}
+if(!localStorage.getItem('playerName')) {
+    setUserName();
+} else {
+    let storedName = localStorage.getItem('playerName');
+    $playerName.text("Player name: "+storedName);
+    $gameForm.append($newLabel, $newSpan, $answerBox, $result, $checkButton);
+    $newSpan.text(scram[genScramWord()]);
+    console.log($newSpan);
+    $("#main").append($gameForm);
+}
+$user.click(function() {
+    setUserName();
+})
 //TRIGGER GAME FORM SUBMIT ON ENTER IN ANSWER FIELD
     $gameForm.on("keydown", function(e){
         if(e.enterKey){
