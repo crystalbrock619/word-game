@@ -1,24 +1,1308 @@
 <!DOCTYPE html>
-<html>
-    <head>
-    <meta charset="utf-8">
-    <title>Word Game</title>
-    <link rel="stylesheet" type="text/css" href="style.css">
-    </head>
-    <body>
-        <h1>Welcome to: "The Brain Scrambler"</h1>
-        <header>
-        <button id="user">Change User</button>
-        <p id="playerName"></p>
-        <div id="scoreBoard">
-        <p id="coinCounter">0</p>
-        <img id="coinImg" src="https://www.kasandbox.org/programming-images/cute/GemGreen.png"/>
-        </div>
-        </header>
-        <section id="main">
-            
-        </section>
-    <script src="https://ajax.googleapis.com/ajax/libs/jquery/2.1.4/jquery.min.js"></script>
-    <script src="./script.js"></script>
-    </body>
-    </html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Brain Scrambler</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700&family=Press+Start+2P&family=Red+Rose&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#141327; --surface:#26215C; --text:#EEEDFE; --muted:#AFA9EC;
+  --accent:#D85A30; --accent-light:#F0997B; --correct:#97C459; --present:#EF9F27;
+  --absent:#A32D2D; --line:#3C3489; --slot:#7F77DD;
+  --dur:1000ms;
+  --base:9s;
+
+  /* ---- fluid with the window, fixed against word length ----
+     The frame is sized ONCE for the longest word in words.json (12
+     letters); tile size is whatever makes 12 fit exactly. A 4-letter
+     word and a 12-letter word use identical tiles, so the cabinet never
+     twitches between rounds. See design-decisions.md. */
+  --card:clamp(320px, 93vw, 820px);
+  --gap:clamp(4px, .8vw, 10px);
+  --pad:clamp(20px, 2.8vw, 38px);
+  --space-lg:clamp(18px, 2.4vw, 34px);
+  --space-md:clamp(14px, 1.9vw, 26px);
+  --space-sm:clamp(7px, .95vw, 13px);
+  --tile-w:calc((var(--card) - 2*var(--pad) - 11*var(--gap)) / 12);
+  --tile-h:calc(var(--tile-w) * 1.14);
+  --mini:calc(var(--tile-w) * .62);
+
+  /* pool is the drag source, slots are the target — the target keeps the
+     larger hit area, and the pool row costs less height */
+  --pool-scale:.78;
+  --pool-w:calc(var(--tile-w) * var(--pool-scale));
+  --pool-h:calc(var(--pool-w) * 1.14);
+
+  /* Orbitron built D and O from the same rounded rectangle, which is
+     unusable when reading one letter at a time is the game. A pixel grid
+     cannot blur two glyphs together. It carries more cap-height per em,
+     so it takes .40 of tile width where Orbitron took .46. */
+  --ps:'Press Start 2P', monospace;
+  --tile-fs:calc(var(--tile-w) * .40);
+  --pool-fs:calc(var(--pool-w) * .40);
+}
+/* a pixel face wants a whole-pixel size or the grid softens against our
+   fluid tile; browsers without round() get the unsnapped value */
+@supports (width: round(down, 10px, 2px)){
+  :root{
+    --tile-fs:round(down, calc(var(--tile-w) * .40), 2px);
+    --pool-fs:round(down, calc(var(--pool-w) * .40), 2px);
+  }
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#08070f;color:var(--text);font-family:'Red Rose',sans-serif;
+  min-height:100vh;display:grid;place-items:center;position:relative;overflow-x:hidden;
+  padding:clamp(14px,3vh,44px) clamp(12px,2vw,28px)}
+/* ambient light so the corners of a large monitor are lit, not dead black */
+body::before{content:"";position:fixed;inset:0;z-index:0;pointer-events:none;
+  background:
+    radial-gradient(60% 55% at 50% 42%, rgba(216,90,48,.16) 0%, rgba(216,90,48,0) 70%),
+    radial-gradient(90% 70% at 50% 100%, rgba(38,33,92,.55) 0%, rgba(38,33,92,0) 70%)}
+
+/* ---- cabinet: the page fills the viewport, the card does not ---- */
+.cabinet{position:relative;z-index:1;width:clamp(320px, 94vw, 940px);
+  display:grid;justify-items:center;gap:clamp(8px,1.3vw,16px)}
+.marquee{width:100%;text-align:center;border:2px solid var(--accent);border-radius:14px;
+  padding:clamp(9px,1.5vw,18px) clamp(14px,2vw,26px);
+  background:linear-gradient(180deg,#2b1733 0%,#171532 55%,#101026 100%);
+  box-shadow:0 0 34px rgba(216,90,48,.22), inset 0 0 26px rgba(239,159,39,.10)}
+.marquee h1{font-family:var(--ps);font-weight:400;line-height:1.5;
+  font-size:clamp(9px,1.65vw,20px);letter-spacing:clamp(1px,.22vw,3px);
+  color:var(--present);text-shadow:0 0 16px rgba(239,159,39,.5)}
+.marquee p{font-family:var(--ps);font-size:clamp(5px,.6vw,8px);
+  letter-spacing:clamp(1px,.25vw,3px);color:var(--accent-light);margin-top:8px}
+.bezel{position:relative;width:100%;border:3px solid var(--accent);border-radius:20px;
+  padding:clamp(10px,1.7vw,26px);background:#0d0c1a;
+  box-shadow:0 0 0 1px rgba(0,0,0,.7), 0 0 70px rgba(216,90,48,.15),
+             inset 0 0 46px rgba(0,0,0,.75)}
+.bezel::after{content:"";position:absolute;inset:5px;border-radius:15px;
+  border:1px solid rgba(175,169,236,.16);pointer-events:none}
+.scan{position:absolute;inset:0;border-radius:18px;pointer-events:none;z-index:3;
+  background:repeating-linear-gradient(to bottom,
+    rgba(238,237,254,.05) 0px, rgba(238,237,254,.05) 1px,
+    rgba(0,0,0,0) 1px, rgba(0,0,0,0) 3px)}
+.base{width:min(78%,700px);height:clamp(8px,1.2vw,16px);border-radius:0 0 14px 14px;
+  background:linear-gradient(180deg,#2b1733,#0d0c1a);
+  border:1px solid var(--line);border-top:none;box-shadow:0 14px 40px rgba(0,0,0,.6)}
+
+.screen{background:var(--bg);border-radius:14px;padding:var(--pad);
+  width:var(--card);max-width:100%;margin:0 auto;position:relative;z-index:2}
+.screen[hidden]{display:none}
+.o{font-family:var(--ps);font-weight:400}
+.center{display:flex;flex-direction:column;align-items:center;justify-content:center;
+  min-height:clamp(260px,34vh,360px)}
+button{font-family:var(--ps);font-weight:400;cursor:pointer}
+.btn{background:var(--accent);color:#FAECE7;border:none;
+  border-radius:clamp(7px,.9vw,11px);font-size:clamp(8px,1.05vw,13px);
+  padding:clamp(11px,1.35vw,17px) clamp(20px,2.6vw,34px)}
+.ghost{background:transparent;color:var(--text);border:2px solid var(--accent);
+  border-radius:clamp(7px,.9vw,11px);font-size:clamp(7px,.95vw,12px);
+  padding:clamp(9px,1.15vw,15px) clamp(15px,2vw,25px)}
+.btn:disabled,.ghost:disabled{opacity:.4;cursor:default}
+.lbl{font-size:clamp(11px,1.1vw,14px);color:var(--muted);text-align:center;
+  margin-bottom:var(--space-sm)}
+.row{display:flex;gap:var(--gap);justify-content:center}
+
+/* ---- tiles: one size for every word ---- */
+.tile{width:var(--tile-w);height:var(--tile-h);border-radius:clamp(5px,.7vw,9px);
+  display:flex;align-items:center;justify-content:center;flex:none;
+  font-family:var(--ps);font-weight:400;font-size:var(--tile-fs);
+  line-height:1;letter-spacing:0;
+  user-select:none;transition:transform .12s ease,background .12s ease}
+.tile.correct{background:var(--correct);color:#173404}
+.tile.present{background:var(--present);color:#412402}
+.tile.absent{background:var(--absent);color:#FCEBEB}
+.tile.idle{background:var(--surface);border:2px solid var(--slot);color:var(--text)}
+.tile.used{background:var(--surface);border:2px solid var(--line);color:var(--line);opacity:.35}
+.tile.slot{background:var(--bg);border:2px dashed var(--line);color:var(--line)}
+.tile.slot.active{border-color:var(--accent);color:var(--accent)}
+.tile.slot.over{border-color:var(--accent);border-style:solid;background:var(--surface)}
+.tile.filled{background:var(--surface);border:2px solid var(--slot);color:var(--text);border-style:solid}
+.pool .tile:not(.used){cursor:grab}
+.pool .tile.dragging{opacity:.4}
+.slots .tile.filled{cursor:pointer}
+.tile.mini{width:var(--mini);height:var(--mini);font-size:calc(var(--mini)*.36)}
+
+/* the pool is deliberately the smaller of the two rows */
+.pool .tile{width:var(--pool-w);height:var(--pool-h);font-size:var(--pool-fs);
+  border-radius:clamp(4px,.6vw,8px)}
+.pool{gap:calc(var(--gap)*.9)}
+
+/* Phones: 12 across would be ~21px, too small to hit. Below 560px the
+   rack goes 6 per row and wraps, with two rows of height reserved at all
+   times — still fixed, just a different fixed. */
+@media (max-width:560px){
+  :root{
+    --tile-w:calc((var(--card) - 2*var(--pad) - 5*var(--gap)) / 6);
+    --pool-w:max(42px, calc(var(--tile-w) * var(--pool-scale)));
+  }
+  .row{flex-wrap:wrap}
+  #slots{min-height:calc(var(--tile-h)*2 + var(--gap))}
+  #pool{min-height:calc(var(--pool-h)*2 + var(--gap))}
+}
+
+/* ---- header ---- */
+.hdr{display:flex;justify-content:space-between;align-items:center;
+  gap:var(--space-sm);margin-bottom:var(--space-sm)}
+.meta{font-size:clamp(7px,.85vw,11px);color:var(--muted)}
+.coins{font-size:clamp(10px,1.2vw,15px) !important;color:var(--present) !important;
+  display:inline-flex;align-items:center;gap:6px}
+/* inline SVG, not a hosted image — external asset hosts are a rejected
+   direction (the 2022 build pulled its coin from kasandbox.org) */
+.coin{width:clamp(15px,1.6vw,21px);height:clamp(15px,1.6vw,21px);flex:none;display:block}
+.flyer .coin{width:clamp(18px,2vw,26px);height:clamp(18px,2vw,26px)}
+@keyframes spin{to{transform:rotateY(360deg)}}
+.coin.spin{animation:spin .6s ease}
+.savebar{display:flex;justify-content:flex-end;align-items:center;gap:10px;
+  margin-bottom:var(--space-lg);padding-bottom:var(--space-sm);
+  border-bottom:1px solid var(--line)}
+.savebar label{font-size:clamp(12px,1.15vw,15px);color:var(--muted);cursor:pointer}
+.sw{width:28px;height:16px;border-radius:8px;background:var(--surface);border:1px solid var(--line);
+  display:inline-flex;align-items:center;padding:2px;cursor:pointer;transition:background .15s}
+.sw i{width:10px;height:10px;border-radius:50%;background:var(--muted);
+  transition:transform .15s,background .15s;display:block}
+.sw.on{background:var(--correct);border-color:var(--correct)}
+.sw.on i{transform:translateX(12px);background:#173404}
+.sw:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+/* ---- rack spacing ---- */
+.rack-row{margin-bottom:var(--space-md)}
+.rack-row + .lbl{margin-top:var(--space-sm)}   /* air between the two halves */
+.controls{display:flex;flex-wrap:wrap;justify-content:center;
+  gap:clamp(9px,1.2vw,15px);margin-top:var(--space-lg);margin-bottom:var(--space-lg)}
+
+/* ---- last guess strip ---- */
+.strip{background:var(--surface);border-radius:clamp(8px,1vw,12px);
+  padding:clamp(13px,1.6vw,21px) clamp(14px,1.8vw,24px);
+  min-height:calc(var(--mini) + clamp(46px,4.6vw,64px))}
+.strip p{font-size:clamp(10px,1.05vw,13px);color:var(--muted);
+  margin-bottom:var(--space-sm)}
+.strip .row{gap:calc(var(--gap)*.7)}
+.strip.empty{display:flex;align-items:center;justify-content:center}
+.strip.empty p{margin:0}
+
+/* ---- feedback motion ---- */
+@keyframes shake{10%,90%{transform:translateX(-3px)}20%,80%{transform:translateX(5px)}
+  30%,50%,70%{transform:translateX(-8px)}40%,60%{transform:translateX(8px)}}
+.shake{animation:shake .5s cubic-bezier(.36,.07,.19,.97) both}
+@keyframes flip{0%{transform:rotateX(0)}50%{transform:rotateX(90deg)}100%{transform:rotateX(0)}}
+.flip{animation:flip .4s ease both}
+@keyframes pop{0%{transform:scale(1)}50%{transform:scale(1.22)}100%{transform:scale(1)}}
+.pop{animation:pop .3s ease}
+
+/* ---- coin fly ---- */
+.flyer{position:fixed;z-index:60;color:var(--present);pointer-events:none;
+  transition:transform .8s cubic-bezier(.3,.9,.4,1),opacity .8s ease}
+
+/* ---- end screen ---- */
+.stats{display:flex;gap:clamp(20px,3vw,40px);margin-bottom:var(--space-lg);text-align:center}
+.stats p:first-child{font-size:clamp(13px,1.6vw,20px);font-family:var(--ps)}
+.stats p:last-child{font-size:clamp(10px,1vw,12px);color:var(--muted);margin-top:6px}
+.endline{font-size:clamp(9px,1.15vw,14px);letter-spacing:clamp(2px,.3vw,4px);
+  line-height:1.6;margin-bottom:var(--space-lg);text-align:center}
+.endsub{font-size:clamp(11px,1.15vw,14px);color:var(--muted);
+  margin-bottom:var(--space-sm);text-align:center}
+.blurb{font-size:clamp(12px,1.2vw,15px);color:var(--muted);text-align:center;
+  max-width:34ch;line-height:1.7;margin-bottom:var(--space-lg)}
+#nameInput{width:min(280px,80%);background:var(--surface);border:2px solid var(--line);
+  border-radius:clamp(7px,.9vw,11px);padding:clamp(11px,1.3vw,16px) 14px;
+  color:var(--text);font-size:clamp(13px,1.3vw,16px);text-align:center;
+  margin-bottom:var(--space-md);font-family:'Red Rose',sans-serif}
+#nameInput:focus{outline:none;border-color:var(--accent)}
+.lose .endline{color:var(--absent)}
+.win .endline{color:var(--correct)}
+.win .screen,.screen.win{box-shadow:inset 0 0 0 2px var(--correct)}
+
+/* ---- celebration ---- */
+#confetti{position:fixed;inset:0;z-index:50;pointer-events:none;display:none}
+#balloons{position:fixed;inset:0;z-index:49;pointer-events:none;overflow:hidden;display:none}
+.balloon{position:absolute;bottom:-160px;width:52px;height:64px;border-radius:50% 50% 48% 48%;
+  opacity:.92;animation:rise linear forwards}
+.balloon::after{content:"";position:absolute;top:100%;left:50%;width:1px;height:70px;
+  background:rgba(238,237,254,.35)}
+.balloon::before{content:"";position:absolute;top:14%;left:22%;width:14px;height:20px;
+  border-radius:50%;background:rgba(255,255,255,.35);filter:blur(3px)}
+@keyframes rise{
+  0%{transform:translateY(0) rotate(0deg);opacity:0}
+  8%{opacity:.92}
+  100%{transform:translateY(-118vh) rotate(var(--spin,8deg));opacity:.92}}
+
+/* ---- tier wordmark area ---- */
+#wmArea{text-align:center;margin-bottom:var(--space-sm);
+  min-height:clamp(78px,9vw,104px);
+  display:flex;align-items:center;justify-content:center}
+#wmArea .stage[hidden]{display:none}
+
+/* the wordmarks keep Orbitron: they are animated per-letter display type,
+   and the pixel face's fixed grid fights the rotate/squash keyframes */
+.wm{display:inline-flex;font-family:'Orbitron',sans-serif;font-weight:700;
+    font-size:clamp(17px,2.6vw,30px);line-height:1.5}
+.wm span{display:inline-block;transform-origin:50% 50%}
+.t1{color:var(--muted);letter-spacing:2px}
+.t2{color:var(--present);letter-spacing:1px}
+.t3{color:var(--accent);letter-spacing:-1px}
+.t4{color:var(--absent);letter-spacing:3px;text-shadow:0 0 14px rgba(163,45,45,.55)}
+
+/* tier 4 stage — fireball burns only during the animation, smoke lingers */
+.stage{position:relative;display:inline-block;padding:26px 40px}
+.stage .wm{position:relative;z-index:2}
+.fire{position:absolute;left:50%;bottom:6%;width:330px;height:132px;
+  transform:translateX(-50%) scale(.6,.4);border-radius:50%;opacity:0;z-index:0;
+  pointer-events:none;filter:blur(17px);
+  background:linear-gradient(to top,
+    rgba(163,45,45,.80) 0%,
+    rgba(226,75,74,.70) 28%,
+    rgba(239,159,39,.58) 58%,
+    rgba(250,199,117,.34) 82%,
+    rgba(250,199,117,0) 100%)}
+@keyframes burn{
+  0%{opacity:0;transform:translateX(-50%) scale(.6,.4)}
+  30%{opacity:.55;transform:translateX(-50%) scale(.92,.86)}
+  52%{opacity:1;transform:translateX(-50%) scale(1.16,1.12)}
+  100%{opacity:0;transform:translateX(-50%) scale(1.42,1.38)}}
+.smoke{position:absolute;bottom:12%;width:120px;height:120px;border-radius:50%;
+  z-index:1;pointer-events:none;filter:blur(21px);opacity:0;
+  background:radial-gradient(circle,rgba(175,169,236,.30) 0%,rgba(175,169,236,0) 70%)}
+.s1{left:16%;animation:drift 11s linear infinite}
+.s2{left:44%;width:150px;animation:drift 14s linear -5s infinite}
+.s3{left:70%;width:100px;animation:drift 9s linear -8s infinite}
+@keyframes drift{
+  0%{opacity:0;transform:translateY(10px) scale(.7)}
+  25%{opacity:.85}
+  70%{opacity:.35}
+  100%{opacity:0;transform:translateY(-96px) scale(1.7)}}
+
+@media (prefers-reduced-motion: reduce){
+  .shake,.flip,.pop,.balloon{animation:none !important}
+  .flyer{transition:none}
+  .tile{transition:none}
+}
+</style>
+</head>
+<body>
+<div class="cabinet">
+
+  <!-- the marquee carries the title, so no screen repeats it -->
+  <div class="marquee">
+    <h1>THE BRAIN SCRAMBLER</h1>
+    <p>INSERT BRAIN</p>
+  </div>
+
+  <div class="bezel">
+  <div class="scan"></div>
+
+  <!-- ============ 1 · START ============ -->
+  <section class="screen center" id="scStart">
+    <p class="blurb">Three guesses per word. Drag the letters into place.
+      Fewer guesses, more coins.</p>
+    <form id="startForm" style="display:flex;flex-direction:column;align-items:center;width:100%">
+      <input id="nameInput" maxlength="16" autocomplete="off" placeholder="Your Name">
+      <button class="btn" type="submit">Start Game</button>
+    </form>
+  </section>
+
+  <!-- ============ 2 · PLAYING ============ -->
+  <section class="screen" id="scPlay" hidden>
+    <div class="hdr">
+      <span class="o meta" id="hdrName">PLAYER</span>
+      <span class="o meta" id="hdrGuess">GUESS 1 / 3</span>
+      <span class="o coins" id="hdrCoins" aria-label="coins"><b id="coinNum">0</b></span>
+    </div>
+    <div class="savebar">
+      <label for="saveSw" id="saveLbl">Save My Progress</label>
+      <span class="sw" id="saveSw" role="switch" tabindex="0" aria-checked="false" aria-labelledby="saveLbl"><i></i></span>
+    </div>
+
+    <div id="wmArea">
+      <div class="stage" data-host="scrambled" hidden><span class="wm t1" data-tier="scrambled"></span></div>
+      <div class="stage" data-host="twisted" hidden><span class="wm t2" data-tier="twisted"></span></div>
+      <div class="stage" data-host="mangled" hidden><span class="wm t3" data-tier="mangled"></span></div>
+      <div class="stage" data-host="obliterated" hidden>
+        <div class="fire" id="fire"></div>
+        <span class="smoke s1"></span><span class="smoke s2"></span><span class="smoke s3"></span>
+        <span class="wm t4" data-tier="obliterated"></span>
+      </div>
+    </div>
+
+    <div class="rack" id="rack">
+      <p class="lbl">Drop Letters Here</p>
+      <div class="row rack-row slots" id="slots"></div>
+      <p class="lbl">Your Letters</p>
+      <div class="row rack-row pool" id="pool"></div>
+    </div>
+
+    <div class="controls">
+      <button class="btn" id="bCheck">Check</button>
+      <button class="ghost" id="bShuffle">Shuffle</button>
+      <button class="ghost" id="bClear">Clear</button>
+    </div>
+
+    <div class="strip empty" id="strip"><p>No Guesses Yet</p></div>
+  </section>
+
+  <!-- ============ 3 · END (win or out of guesses) ============ -->
+  <section class="screen center" id="scEnd" hidden>
+    <p class="o endline" id="endLine">SCRAMBLED!</p>
+    <p class="endsub" id="endSub">The Word Was</p>
+    <div class="row rack-row" id="endWord"></div>
+    <div class="stats">
+      <div><p class="o" style="color:var(--present)" id="stCoins">0</p><p>Coins</p></div>
+      <div><p class="o" id="stSolved">0</p><p>Solved</p></div>
+      <div><p class="o" id="stStreak">0</p><p>Streak</p></div>
+    </div>
+    <div class="controls" style="margin-bottom:0">
+      <button class="btn" id="bNext">Next Word</button>
+      <button class="ghost" id="bQuit" hidden>Quit</button>
+    </div>
+  </section>
+
+  </div><!-- /bezel -->
+
+  <div class="base"></div>
+</div>
+
+<canvas id="confetti"></canvas>
+<div id="balloons"></div>
+
+<script>
+/* ============================================================
+   Word list — inlined from words.json (see design-decisions.md)
+   ============================================================ */
+var WORDS =
+{
+  "_note": "Word list for The Brain Scrambler. Tier labels are shown to the player. Distribution is a diamond: the two middle tiers carry the bulk.",
+  "tiers": [
+    {
+      "id": "scrambled",
+      "label": "Scrambled",
+      "order": 1,
+      "coins": 1,
+      "criteria": "4-5 letters, everyday vocabulary, few anagram traps",
+      "count": 43
+    },
+    {
+      "id": "twisted",
+      "label": "Twisted",
+      "order": 2,
+      "coins": 2,
+      "criteria": "6-7 letters, common words, some repeated or awkward letters",
+      "count": 90
+    },
+    {
+      "id": "mangled",
+      "label": "Mangled",
+      "order": 3,
+      "coins": 3,
+      "criteria": "7-9 letters, less common, unusual letter clusters",
+      "count": 85
+    },
+    {
+      "id": "obliterated",
+      "label": "Obliterated",
+      "order": 4,
+      "coins": 5,
+      "criteria": "9-12 letters, abstract or rare, high anagram ambiguity",
+      "count": 35
+    }
+  ],
+  "words": {
+    "scrambled": [
+      "care",
+      "loaf",
+      "guess",
+      "blink",
+      "spare",
+      "level",
+      "offer",
+      "short",
+      "worry",
+      "spoil",
+      "sassy",
+      "faded",
+      "eager",
+      "shaky",
+      "mourn",
+      "blush",
+      "paint",
+      "tease",
+      "truck",
+      "scold",
+      "bread",
+      "chair",
+      "cloud",
+      "dance",
+      "dream",
+      "floor",
+      "glass",
+      "happy",
+      "house",
+      "juice",
+      "light",
+      "money",
+      "mouse",
+      "music",
+      "night",
+      "ocean",
+      "paper",
+      "plant",
+      "river",
+      "smile",
+      "milky",
+      "zesty",
+      "rifle"
+    ],
+    "twisted": [
+      "invent",
+      "friend",
+      "stream",
+      "fluffy",
+      "appear",
+      "greasy",
+      "terrify",
+      "breathe",
+      "signal",
+      "bridge",
+      "applaud",
+      "regular",
+      "offend",
+      "meeting",
+      "willing",
+      "disarm",
+      "hungry",
+      "ablaze",
+      "invite",
+      "unruly",
+      "crayon",
+      "hulking",
+      "pickle",
+      "gentle",
+      "destroy",
+      "crabby",
+      "quaint",
+      "pocket",
+      "ignore",
+      "snotty",
+      "inject",
+      "lonely",
+      "silver",
+      "babies",
+      "flowers",
+      "thread",
+      "wonder",
+      "connect",
+      "limping",
+      "warlike",
+      "anchor",
+      "basket",
+      "candle",
+      "carpet",
+      "castle",
+      "cellar",
+      "clever",
+      "copper",
+      "cotton",
+      "danger",
+      "desert",
+      "doctor",
+      "dragon",
+      "engine",
+      "fabric",
+      "farmer",
+      "forest",
+      "garden",
+      "guitar",
+      "hammer",
+      "harbor",
+      "helmet",
+      "hollow",
+      "injury",
+      "island",
+      "jacket",
+      "jungle",
+      "kettle",
+      "ladder",
+      "lawyer",
+      "market",
+      "meadow",
+      "mirror",
+      "monkey",
+      "myself",
+      "napkin",
+      "orange",
+      "palace",
+      "parrot",
+      "pencil",
+      "planet",
+      "prison",
+      "puzzle",
+      "ribbon",
+      "rocket",
+      "saddle",
+      "school",
+      "secret",
+      "shadow",
+      "shrimp"
+    ],
+    "mangled": [
+      "interrupt",
+      "embarrass",
+      "marvelous",
+      "aromatic",
+      "likeable",
+      "consider",
+      "direction",
+      "exciting",
+      "perpetual",
+      "abundant",
+      "tendency",
+      "obedient",
+      "practice",
+      "enormous",
+      "discreet",
+      "lopsided",
+      "grateful",
+      "wandering",
+      "absorbed",
+      "abstract",
+      "academic",
+      "accurate",
+      "adhesive",
+      "adjacent",
+      "adorable",
+      "advocate",
+      "aircraft",
+      "allergic",
+      "ambition",
+      "ancestor",
+      "anecdote",
+      "apparent",
+      "appetite",
+      "aptitude",
+      "aquarium",
+      "artifact",
+      "asterisk",
+      "attitude",
+      "aviation",
+      "backbone",
+      "banister",
+      "baritone",
+      "believe",
+      "benefit",
+      "betrayal",
+      "biscuit",
+      "blizzard",
+      "blockade",
+      "boastful",
+      "botanist",
+      "boundary",
+      "brochure",
+      "buoyant",
+      "cabinet",
+      "calamity",
+      "campaign",
+      "capacity",
+      "carnival",
+      "cautious",
+      "ceremony",
+      "chemical",
+      "chestnut",
+      "chivalry",
+      "cinnamon",
+      "circular",
+      "civilian",
+      "clarinet",
+      "coherent",
+      "colossal",
+      "compress",
+      "confetti",
+      "conquest",
+      "cornered",
+      "cranberry",
+      "crescent",
+      "crimson",
+      "crusader",
+      "cylinder",
+      "daffodil",
+      "daunting",
+      "daydream",
+      "dazzling",
+      "deadline",
+      "decagon",
+      "decisive"
+    ],
+    "obliterated": [
+      "destruction",
+      "aboriginal",
+      "psychedelic",
+      "tightfisted",
+      "questionable",
+      "acceptable",
+      "substantial",
+      "understood",
+      "domineering",
+      "abbreviation",
+      "acquiesce",
+      "ambiguous",
+      "anachronism",
+      "anonymous",
+      "antagonize",
+      "apocalypse",
+      "apprentice",
+      "arbitrary",
+      "articulate",
+      "asymmetric",
+      "bewildered",
+      "bureaucrat",
+      "camouflage",
+      "cantankerous",
+      "catastrophe",
+      "chandelier",
+      "clandestine",
+      "coincidence",
+      "conscience",
+      "conspicuous",
+      "counterfeit",
+      "cumbersome",
+      "curmudgeon",
+      "cybernetic",
+      "deliberate"
+    ]
+  }
+}
+;
+
+/* ============================================================
+   Tier wordmark engine — lifted verbatim from
+   _mockups/4-tier-wordmarks.html. Do not rewrite; the keyframes
+   are generated from the per-tier rest-position data below.
+   ============================================================ */
+var WM = (function(){
+  var DUR=1000, BASE=9000;
+  var reduce=window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  var TIERS={
+    scrambled:{word:"SCRAMBLED",stagger:45,rest:function(i){
+      var up=i%2===0;
+      return{t:"translateY("+(up?-4:4)+"px) rotate("+(up?-6:5)+"deg)",o:1};}},
+    twisted:{word:"TWISTED",stagger:90,rest:function(i,n){
+      return{t:"perspective(320px) rotateX("+Math.round(-55+(110/(n-1))*i)+"deg)",o:1};}},
+    mangled:{word:"MANGLED",stagger:26,rest:function(i){
+      var s=[[1.15,.7,-9,3],[.78,1.32,7,-5],[1.3,.62,-4,6],[.85,1.2,12,-3],
+             [1.1,.8,-14,4],[.7,1.4,5,-6],[1.22,.75,-7,2]][i];
+      return{t:"scale("+s[0]+","+s[1]+") rotate("+s[2]+"deg) translateY("+s[3]+"px)",o:1};}},
+    obliterated:{word:"OBLITERATED",stagger:22,rest:function(i){
+      var s=[[-10,-13,-34,.8,.45],[-6,9,21,.9,.62],[-2,-7,-13,1,1],[0,5,8,1.12,1],
+             [2,-4,-6,1.15,1],[1,8,16,1,1],[4,-9,-24,.92,.7],[8,7,29,.85,.55],
+             [12,-12,-38,.75,.4],[16,11,44,.68,.3],[21,-6,-52,.6,.22]][i];
+      return{t:"translate("+s[0]+"px,"+s[1]+"px) rotate("+s[2]+"deg) scale("+s[3]+")",o:s[4]};}}
+  };
+
+  var JIT=[[-18,6,9],[14,-8,-7],[-9,10,5],[20,-5,-11],[-15,7,8],
+           [11,-9,-6],[-21,4,10],[16,-7,-9],[-12,8,6]];
+
+  function frames(tier,i,n,rest){
+    var r="transform:"+rest.t+";opacity:"+rest.o;
+    if(tier==="twisted"){
+      var deg=Math.round(-55+(110/(n-1))*i);
+      return "from{transform:perspective(320px) rotateX("+deg+"deg)}"+
+             "to{transform:perspective(320px) rotateX("+(deg+360)+"deg)}";
+    }
+    if(tier==="scrambled"){
+      var j=JIT[i%JIT.length];
+      return "0%{transform:none}"+
+             "22%{transform:translate("+j[0]+"px,"+j[1]+"px) rotate("+j[2]+"deg)}"+
+             "48%{transform:translate("+(-j[0])+"px,"+(-j[1])+"px) rotate("+(-j[2])+"deg)}"+
+             "72%{transform:translate("+(j[1]*2)+"px,"+j[2]+"px) rotate("+j[0]/2+"deg)}"+
+             "100%{"+r+"}";
+    }
+    if(tier==="mangled"){
+      var dir=i<n/2?-1:1;
+      return "0%{transform:translateX("+(dir*300)+"px);opacity:0}"+
+             "46%{transform:translateX(0);opacity:1}"+
+             "58%{transform:scale(1.38,.6)}"+
+             "74%{transform:scale(.88,1.18)}"+
+             "100%{"+r+"}";
+    }
+    return "0%{transform:none;opacity:1}"+
+           "42%{transform:none;opacity:1}"+
+           "52%{transform:scale(1.14);opacity:1}"+
+           "100%{"+r+"}";
+  }
+
+  var groups={}, fire=document.getElementById("fire");
+  Object.keys(TIERS).forEach(function(key){
+    var cfg=TIERS[key], host=document.querySelector('[data-tier="'+key+'"]');
+    var n=cfg.word.length, spans=[], css="";
+    for(var i=0;i<n;i++){
+      var rest=cfg.rest(i,n), el=document.createElement("span");
+      el.textContent=cfg.word[i];
+      el.style.transform=rest.t; el.style.opacity=rest.o;
+      host.appendChild(el); spans.push(el);
+      css+="@keyframes "+key+i+"{"+frames(key,i,n,rest)+"}";
+    }
+    var st=document.createElement("style"); st.textContent=css; document.head.appendChild(st);
+    groups[key]={key:key,spans:spans,stagger:cfg.stagger};
+  });
+
+  function play(g){
+    if(reduce||!g) return;
+    g.spans.forEach(function(el,i){
+      el.style.animation="none"; void el.offsetWidth;
+      el.style.animation=g.key+i+" "+DUR+"ms cubic-bezier(.5,0,.5,1) "+(i*g.stagger)+"ms 1 both";
+    });
+    if(g.key==="obliterated"&&fire){
+      fire.style.animation="none"; void fire.offsetWidth;
+      fire.style.animation="burn "+DUR+"ms ease-out 1 both";
+    }
+  }
+
+  /* one live tier at a time; the timer re-reads `active` so a served
+     word simply takes over the existing loop rather than stacking one. */
+  var active=null, timer=null;
+  function tick(){
+    timer=setTimeout(function(){ play(groups[active]); tick(); },
+      Math.round(BASE*(0.6+Math.random()*0.8)));
+  }
+  function show(key){
+    active=key;
+    document.querySelectorAll("#wmArea .stage").forEach(function(el){
+      el.hidden = el.getAttribute("data-host")!==key;
+    });
+    if(reduce) return;
+    if(timer) clearTimeout(timer);
+    play(groups[key]); tick();
+  }
+  if(reduce){
+    document.querySelectorAll(".smoke").forEach(function(el){ el.style.animation="none"; });
+  }
+  return {show:show, reduce:reduce};
+})();
+
+/* ============================================================
+   Sound — generated in-code via Web Audio. No external assets.
+   ============================================================ */
+var Sound=(function(){
+  var ctx=null;
+  function ac(){ if(!ctx){ try{ ctx=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){} } return ctx; }
+  function tone(freq,start,dur,type,peak,glideTo){
+    var c=ac(); if(!c) return;
+    var t=c.currentTime+start;
+    var o=c.createOscillator(), g=c.createGain();
+    o.type=type||"sine"; o.frequency.setValueAtTime(freq,t);
+    if(glideTo) o.frequency.exponentialRampToValueAtTime(glideTo,t+dur);
+    g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(peak||0.14,t+Math.min(0.05,dur*0.3));
+    g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+    o.connect(g); g.connect(c.destination); o.start(t); o.stop(t+dur+0.02);
+  }
+  /* soft brass: sawtooth through a lowpass, slow attack — reads as a
+     muted trumpet without needing a sample */
+  function brass(freq,start,dur,peak){
+    var c=ac(); if(!c) return;
+    var t=c.currentTime+start;
+    var o=c.createOscillator(), f=c.createBiquadFilter(), g=c.createGain();
+    o.type="sawtooth"; o.frequency.setValueAtTime(freq,t);
+    f.type="lowpass";
+    f.frequency.setValueAtTime(freq*2.2,t);
+    f.frequency.linearRampToValueAtTime(freq*4.5,t+dur*0.35);
+    f.frequency.linearRampToValueAtTime(freq*2.0,t+dur);
+    f.Q.value=0.9;
+    g.gain.setValueAtTime(0.0001,t);
+    g.gain.linearRampToValueAtTime(peak||0.10,t+0.09);      /* gentle, not a blare */
+    g.gain.setValueAtTime(peak||0.10,t+dur*0.7);
+    g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+    o.connect(f); f.connect(g); g.connect(c.destination);
+    o.start(t); o.stop(t+dur+0.02);
+  }
+  return {
+    place:function(){ tone(520,0,0.07,"triangle",0.09); },
+    lift:function(){  tone(340,0,0.06,"triangle",0.07); },
+    wrong:function(){ tone(200,0,0.34,"sawtooth",0.09,90); },
+    coin:function(i){ tone(880+(i||0)*120,0,0.12,"triangle",0.10); },
+    reveal:function(i){ tone(440*Math.pow(2,(i||0)/12),0,0.16,"sine",0.10); },
+    /* gentle trumpet fanfare — C, E, G, held C */
+    fanfare:function(){
+      brass(523.25,0.00,0.20,0.09);
+      brass(659.25,0.16,0.20,0.09);
+      brass(783.99,0.32,0.24,0.10);
+      brass(1046.50,0.52,0.85,0.11);
+      brass(783.99,0.52,0.85,0.05);
+    },
+    lose:function(){ tone(330,0,0.22,"triangle",0.08); tone(247,0.18,0.42,"triangle",0.08,180); }
+  };
+})();
+
+/* ============================================================
+   Storage — single opt-in toggle, off by default.
+   Off means nothing is written; switching off deletes the key.
+   ============================================================ */
+var KEY="brainScrambler";
+var Store={
+  ok:function(){ try{ var k="__t"; localStorage.setItem(k,"1"); localStorage.removeItem(k); return true; }catch(e){ return false; } },
+  read:function(){
+    try{ var raw=localStorage.getItem(KEY); if(!raw) return null;
+      var o=JSON.parse(raw); return (o&&o.v===1)?o:null; }catch(e){ return null; }
+  },
+  write:function(name,coins){
+    try{ localStorage.setItem(KEY,JSON.stringify({
+      v:1,name:name,coins:coins,updated:new Date().toISOString()})); }catch(e){}
+  },
+  clear:function(){ try{ localStorage.removeItem(KEY); }catch(e){} }
+};
+
+/* ============================================================
+   Game state
+   ============================================================ */
+var G={
+  name:"", coins:0, solved:0, streak:0,
+  word:"", tier:null, scramble:[],
+  guessNo:1, placed:[], over:false, saving:false
+};
+
+var $=function(id){ return document.getElementById(id); };
+var slotsEl=$("slots"), poolEl=$("pool"), stripEl=$("strip");
+
+/* flat pool of all 250 words, so the diamond distribution in words.json
+   is what decides how often each tier comes up. Tiers are served at
+   random — never as an escalating ladder (see design-decisions.md). */
+var DECK=(function(){
+  var out=[];
+  WORDS.tiers.forEach(function(t){
+    (WORDS.words[t.id]||[]).forEach(function(w){ out.push({word:w,tier:t}); });
+  });
+  return out;
+})();
+
+function shuffled(arr){
+  var a=arr.slice(), i, j, t;
+  for(i=a.length-1;i>0;i--){ j=Math.floor(Math.random()*(i+1)); t=a[i]; a[i]=a[j]; a[j]=t; }
+  return a;
+}
+
+/* re-shuffle guard: the scramble must never equal the source word.
+   Words whose letters are all identical would loop forever, so bail
+   out after a bounded number of tries. */
+function scrambleOf(word){
+  var letters=word.toUpperCase().split(""), out, n=0;
+  do{ out=shuffled(letters); n++; }while(out.join("")===letters.join("") && n<40);
+  return out;
+}
+
+/* ============================================================
+   Serving a word
+   ============================================================ */
+function serve(){
+  var pick=DECK[Math.floor(Math.random()*DECK.length)];
+  G.word=pick.word.toUpperCase();
+  G.tier=pick.tier;
+  G.scramble=scrambleOf(G.word);
+  G.guessNo=1; G.placed=[]; G.over=false;
+
+  WM.show(G.tier.id);
+  stripEl.className="strip empty";
+  stripEl.innerHTML="<p>No Guesses Yet</p>";
+  renderHeader(); renderRack();
+  show("scPlay");
+}
+
+/* coin icon — inline SVG so there is no asset to host or lose */
+var COIN_SVG='<svg class="coin" viewBox="0 0 24 24" aria-hidden="true" focusable="false">'
+  +'<circle cx="12" cy="12" r="10" fill="var(--present)" stroke="#8F5A0B" stroke-width="2"/>'
+  +'<circle cx="12" cy="12" r="6.6" fill="none" stroke="#8F5A0B" stroke-width="1.2" opacity=".5"/>'
+  +'<path d="M14.2 8.6a3.9 3.9 0 1 0 0 6.8" fill="none" stroke="#412402" stroke-width="2" '
+  +'stroke-linecap="round"/>'
+  +'<path d="M12 6.4v11.2" stroke="#412402" stroke-width="2" stroke-linecap="round"/>'
+  +'<ellipse cx="8.4" cy="7.4" rx="2.3" ry="1.3" fill="#FFF" opacity=".38" '
+  +'transform="rotate(-38 8.4 7.4)"/></svg>';
+
+$("hdrCoins").insertAdjacentHTML("beforeend",COIN_SVG);
+
+function renderHeader(){
+  $("hdrName").textContent=(G.name||"player").toUpperCase();
+  $("hdrGuess").textContent="GUESS "+G.guessNo+" / 3";
+  $("coinNum").textContent=G.coins;
+}
+
+/* ============================================================
+   Two-row drag rack — slots on top, pool below
+   ============================================================ */
+function renderRack(){
+  var i;
+  slotsEl.innerHTML=""; poolEl.innerHTML="";
+
+  for(i=0;i<G.word.length;i++){
+    var s=document.createElement("div");
+    var ch=G.placed[i];
+    s.className="tile "+(ch==null?"slot":"filled");
+    s.textContent=ch==null?"·":G.scramble[ch];
+    s.setAttribute("data-slot",i);
+    if(ch==null && i===firstEmpty()) s.classList.add("active");
+    s.addEventListener("dragover",onOver);
+    s.addEventListener("dragleave",onLeave);
+    s.addEventListener("drop",onDrop);
+    s.addEventListener("click",onSlotClick);
+    slotsEl.appendChild(s);
+  }
+
+  for(i=0;i<G.scramble.length;i++){
+    var p=document.createElement("div");
+    var used=G.placed.indexOf(i)>-1;
+    p.className="tile "+(used?"used":"idle");
+    p.textContent=G.scramble[i];
+    p.setAttribute("data-pool",i);
+    if(!used){
+      p.draggable=true;
+      p.addEventListener("dragstart",onDragStart);
+      p.addEventListener("dragend",onDragEnd);
+      p.addEventListener("click",onPoolClick);
+    }
+    poolEl.appendChild(p);
+  }
+  $("bCheck").disabled = firstEmpty()!==-1 || G.over;
+}
+
+function firstEmpty(){
+  for(var i=0;i<G.word.length;i++) if(G.placed[i]==null) return i;
+  return -1;
+}
+
+function place(poolIdx,slotIdx){
+  if(G.over) return;
+  if(G.placed.indexOf(poolIdx)>-1) return;
+  if(slotIdx==null||slotIdx<0) slotIdx=firstEmpty();
+  if(slotIdx===-1) return;
+  if(G.placed[slotIdx]!=null) lift(slotIdx);
+  G.placed[slotIdx]=poolIdx;
+  Sound.place(); renderRack();
+  var t=slotsEl.querySelector('[data-slot="'+slotIdx+'"]');
+  if(t) t.classList.add("pop");
+}
+
+function lift(slotIdx){
+  if(G.over||G.placed[slotIdx]==null) return;
+  G.placed[slotIdx]=null;
+  Sound.lift();
+}
+
+var dragging=null;
+function onDragStart(e){
+  dragging=+this.getAttribute("data-pool");
+  this.classList.add("dragging");
+  try{ e.dataTransfer.setData("text/plain",String(dragging));
+       e.dataTransfer.effectAllowed="move"; }catch(err){}
+}
+function onDragEnd(){ this.classList.remove("dragging"); dragging=null; }
+function onOver(e){ e.preventDefault(); this.classList.add("over"); }
+function onLeave(){ this.classList.remove("over"); }
+function onDrop(e){
+  e.preventDefault(); this.classList.remove("over");
+  var idx=dragging;
+  if(idx==null){ try{ idx=parseInt(e.dataTransfer.getData("text/plain"),10); }catch(err){} }
+  if(idx==null||isNaN(idx)) return;
+  place(idx,+this.getAttribute("data-slot"));
+}
+function onPoolClick(){ place(+this.getAttribute("data-pool"),null); }
+function onSlotClick(){
+  var i=+this.getAttribute("data-slot");
+  if(G.placed[i]==null) return;
+  lift(i); renderRack();
+}
+
+/* ============================================================
+   Scoring — two pass, so duplicate letters resolve correctly
+   ============================================================ */
+function score(guess,answer){
+  var n=answer.length, res=new Array(n), left={}, i, c;
+  for(i=0;i<n;i++){
+    if(guess[i]===answer[i]) res[i]="correct";
+    else { c=answer[i]; left[c]=(left[c]||0)+1; }
+  }
+  for(i=0;i<n;i++){
+    if(res[i]) continue;
+    c=guess[i];
+    if(left[c]>0){ res[i]="present"; left[c]--; }
+    else res[i]="absent";
+  }
+  return res;
+}
+
+function currentGuess(){
+  return G.placed.map(function(p){ return G.scramble[p]; }).join("");
+}
+
+/* The guessed word is not repeated in text — the scored tiles below
+   already spell it, and printing it twice was redundant. */
+function renderStrip(guess,res){
+  stripEl.className="strip";
+  var html='<p>Last Guess</p><div class="row">';
+  for(var i=0;i<guess.length;i++)
+    html+='<div class="tile mini '+res[i]+'">'+guess[i]+'</div>';
+  stripEl.innerHTML=html+"</div>";
+}
+
+/* ============================================================
+   Check
+   ============================================================ */
+function check(){
+  if(G.over||firstEmpty()!==-1) return;
+  var guess=currentGuess();
+
+  if(guess===G.word){ win(); return; }
+
+  var res=score(guess,G.word);
+  renderStrip(guess,res);
+  Sound.wrong();
+  slotsEl.classList.remove("shake"); void slotsEl.offsetWidth;
+  slotsEl.classList.add("shake");
+
+  /* paint the answer row with the result for a beat before clearing,
+     so the feedback lands on the tiles the player actually placed */
+  Array.prototype.forEach.call(slotsEl.children,function(el,i){
+    el.className="tile "+res[i];
+  });
+
+  G.guessNo++;
+  var out = G.guessNo>3;
+  setTimeout(function(){
+    if(out){ lose(); }
+    else { G.placed=[]; renderHeader(); renderRack(); }
+  },760);
+}
+
+/* ============================================================
+   Win / lose
+   ============================================================ */
+function win(){
+  G.over=true;
+  var gained=(4-G.guessNo)*G.tier.coins;   /* 3 / 2 / 1 by guess number */
+  var bonus = G.guessNo===1;
+  G.solved++; G.streak++;
+
+  /* flip the tiles green one at a time before leaving the play screen */
+  Array.prototype.forEach.call(slotsEl.children,function(el,i){
+    setTimeout(function(){
+      el.className="tile correct flip";
+      if(!WM.reduce) Sound.reveal(i);
+      else if(i===0) Sound.reveal(0);
+    }, i*110);
+  });
+
+  var wait=G.word.length*110+320;
+  setTimeout(function(){
+    flyCoins(gained);
+    G.coins+=gained;
+    persist();
+    renderHeader();
+    var hc=$("hdrCoins").querySelector(".coin");   /* coin flips as the total lands */
+    if(hc&&!WM.reduce){ hc.classList.remove("spin"); void hc.offsetWidth; hc.classList.add("spin"); }
+    endScreen(true,gained,bonus);
+  },wait);
+}
+
+function lose(){
+  G.over=true;
+  G.streak=0;
+  persist();
+  Sound.lose();
+  endScreen(false,0,false);
+}
+
+function endScreen(won,gained,bonus){
+  var s=$("scEnd");
+  s.classList.toggle("win",won);
+  s.classList.toggle("lose",!won);
+  $("endLine").textContent = won
+    ? (bonus ? "SOLVED IN ONE!" : "UNSCRAMBLED!")
+    : "SCRAMBLED!";
+  $("endSub").textContent = won
+    ? ("+"+gained+" Coins"+(bonus?" · Solve-In-One Bonus":"")+" · "+G.tier.label)
+    : "The Word Was";
+
+  var html="";
+  for(var i=0;i<G.word.length;i++) html+='<div class="tile correct">'+G.word[i]+'</div>';
+  $("endWord").innerHTML=html;   /* tiles are one fixed size now — no per-length hacks */
+
+  $("stCoins").textContent=G.coins;
+  $("stSolved").textContent=G.solved;
+  $("stStreak").textContent=G.streak;
+  $("stStreak").style.color = G.streak>0 ? "var(--correct)" : "var(--absent)";
+
+  $("bQuit").hidden=!won;
+  show("scEnd");
+  if(won) celebrate();
+}
+
+/* coins fly from the middle of the screen up to the counter */
+function flyCoins(n){
+  if(WM.reduce||n<=0) return;
+  var target=$("hdrCoins").getBoundingClientRect();
+  for(var i=0;i<Math.min(n,6);i++)(function(i){
+    setTimeout(function(){
+      var f=document.createElement("div");
+      f.className="flyer"; f.innerHTML=COIN_SVG;
+      f.style.left=(window.innerWidth/2-8+(Math.random()*80-40))+"px";
+      f.style.top=(window.innerHeight/2)+"px";
+      document.body.appendChild(f);
+      Sound.coin(i);
+      requestAnimationFrame(function(){
+        f.style.transform="translate("+(target.left-window.innerWidth/2+8)+"px,"+
+          (target.top-window.innerHeight/2)+"px) scale(.7)";
+        f.style.opacity="0";
+      });
+      setTimeout(function(){ f.remove(); },900);
+    }, i*90);
+  })(i);
+}
+
+/* ============================================================
+   Celebration — full-screen confetti + balloons from the bottom
+   ============================================================ */
+function celebrate(){
+  Sound.fanfare();
+  if(WM.reduce) return;
+  confetti();
+  balloons();
+}
+
+function balloons(){
+  var host=$("balloons");
+  host.style.display="block";
+  host.innerHTML="";
+  var cols=["#D85A30","#EF9F27","#97C459","#7F77DD","#EEEDFE","#A32D2D"];
+  for(var i=0;i<14;i++){
+    var b=document.createElement("div");
+    b.className="balloon";
+    var c=cols[i%cols.length];
+    b.style.background="radial-gradient(circle at 32% 28%, "+c+", rgba(0,0,0,.35))";
+    b.style.left=(Math.random()*92)+"%";
+    var sc=0.7+Math.random()*0.7;
+    b.style.width=(52*sc)+"px"; b.style.height=(64*sc)+"px";
+    b.style.setProperty("--spin",(Math.random()*24-12)+"deg");
+    b.style.animationDuration=(5.5+Math.random()*4)+"s";
+    b.style.animationDelay=(Math.random()*1.6)+"s";
+    host.appendChild(b);
+  }
+  setTimeout(function(){ host.style.display="none"; host.innerHTML=""; },11000);
+}
+
+function confetti(){
+  var cv=$("confetti"), ctx=cv&&cv.getContext&&cv.getContext("2d");
+  if(!ctx) return;            /* no canvas — the win still lands, just without confetti */
+  var dpr=window.devicePixelRatio||1;
+  function size(){ cv.width=innerWidth*dpr; cv.height=innerHeight*dpr;
+    cv.style.width=innerWidth+"px"; cv.style.height=innerHeight+"px"; ctx.setTransform(dpr,0,0,dpr,0,0); }
+  size(); cv.style.display="block";
+  var cols=["#D85A30","#EF9F27","#97C459","#EEEDFE","#7F77DD"];
+  var bits=[], i;
+  for(i=0;i<160;i++) bits.push({
+    x:Math.random()*innerWidth, y:-20-Math.random()*innerHeight*0.8,
+    w:5+Math.random()*7, h:8+Math.random()*10,
+    vy:2+Math.random()*3.4, vx:-1.4+Math.random()*2.8,
+    a:Math.random()*Math.PI*2, va:-0.16+Math.random()*0.32,
+    c:cols[i%cols.length]
+  });
+  var start=performance.now();
+  (function frame(now){
+    var life=now-start;
+    ctx.clearRect(0,0,innerWidth,innerHeight);
+    var alive=false;
+    bits.forEach(function(b){
+      b.x+=b.vx; b.y+=b.vy; b.a+=b.va; b.vy+=0.014;
+      if(b.y<innerHeight+30) alive=true;
+      ctx.save(); ctx.translate(b.x,b.y); ctx.rotate(b.a);
+      ctx.globalAlpha = life>4200 ? Math.max(0,1-(life-4200)/1400) : 1;
+      ctx.fillStyle=b.c; ctx.fillRect(-b.w/2,-b.h/2,b.w,b.h); ctx.restore();
+    });
+    if(alive && life<5800) requestAnimationFrame(frame);
+    else { ctx.clearRect(0,0,innerWidth,innerHeight); cv.style.display="none"; }
+  })(start);
+}
+
+/* ============================================================
+   Screens
+   ============================================================ */
+function show(id){
+  ["scStart","scPlay","scEnd"].forEach(function(s){ $(s).hidden = s!==id; });
+}
+
+/* ============================================================
+   Save toggle — added last so nothing else depends on it
+   ============================================================ */
+function persist(){ if(G.saving) Store.write(G.name,G.coins); }
+
+function setSaving(on){
+  G.saving=!!on;
+  var sw=$("saveSw");
+  sw.classList.toggle("on",G.saving);
+  sw.setAttribute("aria-checked",G.saving?"true":"false");
+  if(G.saving) persist(); else Store.clear();   /* off must actually delete */
+}
+
+$("saveSw").addEventListener("click",function(){ setSaving(!G.saving); });
+$("saveSw").addEventListener("keydown",function(e){
+  if(e.key===" "||e.key==="Enter"){ e.preventDefault(); setSaving(!G.saving); }
+});
+
+/* ============================================================
+   Wiring
+   ============================================================ */
+$("startForm").addEventListener("submit",function(e){
+  e.preventDefault();
+  G.name=($("nameInput").value||"player").trim().slice(0,16);
+  serve();
+});
+
+$("bCheck").addEventListener("click",check);
+$("bClear").addEventListener("click",function(){
+  if(G.over) return; G.placed=[]; Sound.lift(); renderRack();
+});
+$("bShuffle").addEventListener("click",function(){
+  if(G.over) return;
+  G.scramble=scrambleOf(G.word); G.placed=[]; Sound.place(); renderRack();
+});
+$("bNext").addEventListener("click",serve);
+
+/* Quit returns to the start screen. The run is deliberately KEPT — name,
+   coins, solved and streak all survive, so Start Game continues rather
+   than restarting. Wiping the score here would be a second, invisible
+   data decision sitting on top of the save toggle, and the player never
+   asked for one. */
+$("bQuit").addEventListener("click",function(){
+  G.over=true;
+  $("nameInput").value=G.name;
+  document.querySelectorAll("#wmArea .stage").forEach(function(el){ el.hidden=true; });
+  var b=$("balloons"); b.style.display="none"; b.innerHTML="";   /* stop any celebration */
+  show("scStart");
+  $("nameInput").focus();
+});
+
+document.addEventListener("keydown",function(e){
+  if($("scPlay").hidden||G.over) return;
+  if(e.key==="Enter"){ e.preventDefault(); check(); return; }
+  if(e.key==="Backspace"){
+    e.preventDefault();
+    for(var i=G.word.length-1;i>=0;i--) if(G.placed[i]!=null){ lift(i); renderRack(); return; }
+    return;
+  }
+  if(!/^[a-zA-Z]$/.test(e.key)) return;
+  var ch=e.key.toUpperCase();
+  for(var j=0;j<G.scramble.length;j++)
+    if(G.scramble[j]===ch && G.placed.indexOf(j)===-1){ place(j,null); return; }
+});
+
+/* restore a saved session if the player opted in previously */
+(function(){
+  if(!Store.ok()){ $("saveSw").style.display="none"; $("saveLbl").style.display="none"; return; }
+  var saved=Store.read();
+  if(saved){
+    G.name=saved.name||""; G.coins=saved.coins||0;
+    $("nameInput").value=G.name;
+    setSaving(true);
+  }
+})();
+</script>
+</body>
+</html>
