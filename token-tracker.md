@@ -101,6 +101,7 @@ effective cost is far lower than the raw total suggests.
 | 29 | Fixed mockup's wrong PLEAT/PLATE scoring; tile-font comparison mockup | ~1,400 |
 | 30 | Press Start 2P into the layout mockup with a scope selector | ~900 |
 | 31 | **Shipped the cabinet redesign to `index.html`** — framing, fluid+fixed sizing, spacing scale, pool scaling, Press Start 2P everywhere, strip label trimmed | ~2,800 |
+| 32 | Wired Quit; cleanup pass; first commits on `build` | ~1,400 |
 
 ---
 

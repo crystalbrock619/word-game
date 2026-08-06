@@ -10,22 +10,21 @@ unless it says otherwise. `_mockups/5` and `_mockups/6` have served their
 purpose and are candidates for the cleanup pass — `5` is the closer call,
 since it still holds the scope selector and the tight-spacing comparison.
 
-Visual reference lives in **`_mockups/`** — open these in a browser
-rather than reading descriptions here:
+**`index.html` is now the visual reference.** The screen mockups have
+been through the cleanup pass and are gone — the live page supersedes
+them, and every decision they carried is written down below.
 
-| File | Covers |
-|---|---|
-| `_mockups/0-palette.html` | All eight palette roles as swatches |
-| `_mockups/1-start.html` | Name entry, title treatment |
-| `_mockups/2-playing.html` | **Canonical layout reference** — drag rack, controls, last-guess strip |
-| `_mockups/3-out-of-guesses.html` | Reveal, stats row, next-word |
-| `_mockups/4-tier-wordmarks.html` | All four stylized tier wordmarks |
-| `_mockups/5-desktop-layout.html` | **Awaiting review** — arcade cabinet framing + fluid sizing. Resize the window; controls bottom-right toggle scanlines, glow, and a 12-letter word |
-| `_mockups/6-tile-font.html` | **Awaiting decision** — five tile fonts at real size, with a size slider and a squint test |
+One mockup survives:
 
-`_mockups/` is scratch and comes up for review in the cleanup pass after
-the first live push. See "Cleanup pass" below for the actual criterion —
-it is not "delete everything that doesn't ship."
+| File | Covers | Why it stays |
+|---|---|---|
+| `_mockups/4-tier-wordmarks.html` | All four stylized tier wordmarks | It is the **source** of the animation code in `index.html`, not a picture of it. Change it and re-splice; never hand-edit the generated block |
+
+Deleted in the cleanup pass, recoverable from commit `6e557d6` if ever
+needed: `0-palette` (every hex is in the table below), `1-start`,
+`2-playing`, `3-out-of-guesses` (all superseded by the live screens),
+`5-desktop-layout` and `6-tile-font` (their comparisons were against
+options that have since been decided).
 
 ---
 
@@ -463,11 +462,22 @@ scatter keyframes — a face built on whole pixels smears under
 sub-pixel transforms. Orbitron is still loaded for that one rule and
 nothing else.
 
+## Quit — wired (2026-08-05)
+
+Returns to the start screen. **The run is deliberately kept**: name,
+coins, solved and streak all survive, so Start Game continues rather
+than restarting. Wiping the score on Quit would be a second, invisible
+data decision sitting on top of the save toggle, and the player never
+asked for one.
+
+Quit is still shown on a win only, not on a loss — which is arguably
+backwards, since someone who just ran out of guesses is the more likely
+quitter. Left as-is because it was not asked for; a one-line change if
+wanted.
+
 ## Open questions
 
-- What "Quit" should actually do — return to the start screen, or end
-  the session with a summary. Still an empty stub.
-- Cleanup pass has not been run. It is now due.
+- Whether Quit should also appear on the out-of-guesses screen
 
 *Resolved and shipped 2026-08-05: tile font (Press Start 2P, everything),
 desktop layout (cabinet + fluid + fixed frame), start-screen title (the
@@ -553,8 +563,15 @@ automatic.
 ## Related files
 
 - `_mockups/` — visual reference, one file per screen
-- `words.json` — 253 words, four tiers (ships inlined into `index.html`)
-- `token-tracker.md` — running token estimates for this redesign
-- `The_Brain_Scrambler.py` — source of the word list and game mechanics
 - `index.html` — **the live game**, self-contained
-- `script.js` / `style.css` — 2022 leftovers, now unreferenced
+- `words.json` — 253 words, four tiers; ships inlined into `index.html`,
+  so edit here and re-splice rather than editing the copy in the page
+- `design-decisions.md` — this file
+- `token-tracker.md` — running token estimates
+- `The_Brain_Scrambler.py` — the 2022 original; kept as the source of the
+  word list and mechanics, and because it is the thing being rewritten
+- `_mockups/4-tier-wordmarks.html` — source of the wordmark animation code
+- `README.md` — repo readme, shown on GitHub
+
+`script.js` and `style.css` were deleted in the cleanup pass: the 2022
+page no longer exists to reference them.
